@@ -1,123 +1,169 @@
 import logging
-import os
-from hyperliquid.exchange import Exchange
+import asyncio
+from typing import List
+from hyperliquid.info import Info
 from hyperliquid.utils import constants
-from eth_account.signers.local import LocalAccount
-from eth_account import Account
 from app.core.config import settings
+from app.domain.schemas import PortfolioState, Position, OrderRequest, OrderResult, TradeAction
+from app.domain.interfaces import IExecutor
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-class OrderExecutor:
+class OrderExecutor(IExecutor):
     def __init__(self):
         self.env = constants.TESTNET_API_URL if settings.HYPERLIQUID_ENV == "TESTNET" else constants.MAINNET_API_URL
-        self.private_key = settings.PRIVATE_KEY
-        self.account: LocalAccount = None
-        self.exchange: Exchange = None
+        self.public_address = settings.PUBLIC_ADDRESS
         
-        if self.private_key:
-            try:
-                self.account = Account.from_key(self.private_key)
-                # Initialize Exchange with the account
-                # Note: In a real "API Agent" flow, we might use a different address for the agent
-                # than the main wallet, but the signing logic is the same.
-                self.exchange = Exchange(self.account, self.env)
-                logger.info(f"🔌 Executor initialized for address: {self.account.address}")
-            except Exception as e:
-                logger.error(f"Failed to initialize Executor: {e}")
+        if not self.public_address:
+            logger.warning("⚠️ PUBLIC_ADDRESS not set. Portfolio state will be empty.")
+        
+        # Initialize Info API (Read-Only, No Private Key needed)
+        self.info = Info(self.env, skip_ws=True)
+        logger.info(f"🔌 Executor initialized in Non-Custodial Mode (Read-Only). Address: {self.public_address}")
 
-    def get_account_state(self) -> dict:
+    async def get_portfolio_state(self) -> PortfolioState:
         """
-        Fetches current balance and equity.
+        Fetches current balance and equity asynchronously using public Info API.
         """
-        if not self.exchange:
-            return {'total_equity': 0.0, 'available_balance': 0.0, 'positions': []}
+        if not self.public_address:
+            return PortfolioState(total_equity=0.0, available_balance=0.0, positions=[])
             
         try:
-            user_state = self.exchange.info.user_state(self.account.address)
-            margin_summary = user_state.get('marginSummary', {})
+            # Run blocking SDK call in a thread
+            spot_state = await asyncio.to_thread(
+                self.info.spot_user_state, 
+                self.public_address
+            )
             
-            total_equity = float(margin_summary.get('accountValue', 0.0))
-            # In Hyperliquid, 'withdrawable' is a good proxy for available USDC for spot?
-            # Or 'totalMargin' if using cross. 
-            # For Spot, we look at the Spot balances usually.
-            # Let's assume we are trading Perps for now as Hyperliquid is Perp-first, 
-            # BUT the user said "Spot Only". 
-            # Hyperliquid Spot API is slightly different. 
-            # The SDK supports spot. We need to check spot balances.
-            
-            # Checking spot state
-            spot_state = self.exchange.info.spot_user_state(self.account.address)
             balances = spot_state.get('balances', [])
             
             usdc_balance = 0.0
+            positions = []
+            
             for bal in balances:
-                if bal['coin'] == 'USDC':
-                    usdc_balance = float(bal['total']) # 'total' or 'hold'?
-                    break
+                coin = bal['coin']
+                total = float(bal['total'])
+                
+                if coin == 'USDC':
+                    usdc_balance = total
+                else:
+                    if total > 0:
+                        positions.append(Position(
+                            symbol=coin,
+                            side="LONG",
+                            size=total,
+                            entry_price=0.0, # Placeholder, requires fills history for accuracy
+                            unrealized_pnl=0.0
+                        ))
             
-            # If Spot State is empty (no interaction yet), fallback to 0
-            
-            return {
-                'total_equity': usdc_balance, # Simplified for Spot-only portfolio
-                'available_balance': usdc_balance,
-                'positions': balances
-            }
+            return PortfolioState(
+                total_equity=usdc_balance, # Simplified
+                available_balance=usdc_balance,
+                positions=positions,
+                timestamp=datetime.utcnow()
+            )
             
         except Exception as e:
             logger.error(f"Error fetching account state: {e}")
-            return {'total_equity': 0.0, 'available_balance': 0.0, 'positions': []}
+            return PortfolioState(total_equity=0.0, available_balance=0.0, positions=[])
 
-    def execute_order(self, action: str, size: float, price: float = None):
+    async def execute_order(self, order: OrderRequest) -> OrderResult:
         """
-        Executes a MARKET order (for MVP simplicity).
+        Constructs the order payload for the Frontend to sign. 
+        Does NOT execute the order directly (Non-Custodial).
         """
-        if not self.exchange:
-            logger.error("Cannot execute: No Exchange connection.")
-            return
-
-        is_buy = action == 'BUY'
+        is_buy = order.action == TradeAction.BUY
         
-        logger.info(f"🚀 EXECUTING {action} | Size: {size} | Symbol: {settings.SYMBOL}")
+        logger.info(f"📝 PREPARING ORDER PAYLOAD {order.action} | Size: {order.size} | Symbol: {order.symbol}")
         
         try:
-            # Hyperliquid Spot Order
-            # coin: str (e.g. "ETH")
-            # is_buy: bool
-            # sz: float
-            # limit_px: float (For market orders, use aggressive limit or specific market method)
-            # order_type: dict (e.g. {"limit": {"tif": "Gtc"}})
+            # Price Logic
+            if order.price is None:
+                return OrderResult(order_id="", status="FAILED", error_message="Price required for execution")
+
+            exec_price = order.price * 1.05 if is_buy else order.price * 0.95
+            exec_price = round(exec_price, 1) # Rounding should ideally use exchange meta
             
-            # For Market Order in Spot:
-            # We usually send a Limit order crossing the book (IoC or aggressive price).
-            # Or use the 'market_open' helper if available.
+            # Construct Payload for Frontend
+            # This matches what Hyperliquid SDK expects or what the Frontend needs to call the SDK
+            payload = {
+                "coin": order.symbol,
+                "is_buy": is_buy,
+                "sz": order.size,
+                "limit_px": exec_price,
+                "order_type": {"limit": {"tif": "Ioc"}},
+                "reduce_only": order.reduce_only
+            }
             
-            # Let's try a Market Order via SDK helper if possible, or aggressive limit.
-            # SDK 'market_open' is for perps. Spot might need 'order' method.
+            # Return PENDING_SIGNATURE status with the payload in error_message (or we should add a field to OrderResult)
+            # Since OrderResult definition is fixed in schemas.py, we'll use a convention or update schema.
+            # For now, let's assume the caller (BotManager) handles the 'PENDING' status and extracts data.
+            # We will return the payload as a JSON string in 'order_id' or handle it in BotManager.
+            # Better: BotManager broadcasts the OrderRequest directly.
             
-            # Constructing the order
-            # Price: If Buy, Price = Current * 1.05 (Slippage tolerance)
-            # Price: If Sell, Price = Current * 0.95
-            
-            exec_price = price * 1.05 if is_buy else price * 0.95
-            
-            # Rounding price to tick size (assuming 0.1 for BTC for now, need meta)
-            exec_price = round(exec_price, 1)
-            
-            result = self.exchange.order(
-                name=settings.SYMBOL,
-                is_buy=is_buy,
-                sz=size,
-                limit_px=exec_price,
-                order_type={"limit": {"tif": "Ioc"}}, # Immediate or Cancel for "Market-like"
-                vault_address=None # Spot usually doesn't use vault address like perps?
+            # We return "PENDING" and the BotManager will know to broadcast the request.
+            return OrderResult(
+                order_id="WAITING_FOR_SIGNATURE",
+                status="PENDING",
+                filled_size=0.0,
+                filled_price=0.0,
+                payload=payload
             )
-            
-            status = result['status']
-            if status == 'ok':
-                logger.info(f"✅ ORDER FILLED: {result}")
-            else:
-                logger.error(f"❌ ORDER FAILED: {result}")
                 
         except Exception as e:
-            logger.error(f"Execution Exception: {e}")
+            logger.error(f"Order Preparation Exception: {e}")
+            return OrderResult(order_id="", status="FAILED", error_message=str(e))
+
+    async def cancel_order(self, order_id: str, symbol: str) -> OrderResult:
+        """
+        Constructs cancel payload.
+        """
+        payload = {
+            "type": "cancel",
+            "coin": symbol,
+            "oid": int(order_id)
+        }
+        return OrderResult(
+            order_id=order_id,
+            status="PENDING",
+            payload=payload
+        )
+
+    async def close_all_positions(self) -> List[OrderResult]:
+        """
+        Generates MARKET SELL payloads for all open positions.
+        """
+        state = await self.get_portfolio_state()
+        results = []
+        
+        for pos in state.positions:
+            if pos.size > 0:
+                # Create Market Sell Order
+                # We use a very low price for market sell or handle it as market in frontend
+                # For safety, we'll use a limit price far below current price if we had it, 
+                # but since we don't have price feed here easily, we rely on Frontend 'Market' flag 
+                # or send a Market Order payload if supported.
+                # Hyperliquid SDK 'market_open' is actually a limit IOC with aggressive price.
+                
+                # We will construct a payload that implies "Close This Position"
+                # The frontend will interpret this.
+                
+                payload = {
+                    "coin": pos.symbol,
+                    "is_buy": False, # Sell to close Long
+                    "sz": pos.size,
+                    "limit_px": 0, # Market
+                    "order_type": {"limit": {"tif": "Ioc"}}, # Will need to be adjusted by frontend for Market
+                    "reduce_only": True
+                }
+                
+                results.append(OrderResult(
+                    order_id="WAITING_FOR_SIGNATURE",
+                    status="PENDING",
+                    filled_size=0.0,
+                    filled_price=0.0,
+                    payload=payload
+                ))
+        
+        return results

@@ -22,15 +22,15 @@ def risk_manager():
     return RiskManager()
 
 @pytest.fixture
-def mock_exchange():
-    with patch("app.domain.execution.Exchange") as mock:
+def mock_info():
+    with patch("app.domain.execution.Info") as mock:
         yield mock
 
 @pytest.fixture
-def order_executor(mock_settings, mock_exchange):
+def order_executor(mock_settings, mock_info):
     # We need to mock Account.from_key to avoid actual key processing issues with dummy key
     with patch("app.domain.execution.Account.from_key") as mock_account:
         mock_account.return_value.address = "0xTestAddress"
         executor = OrderExecutor()
-        executor.exchange = mock_exchange.return_value
+        executor.info = mock_info.return_value
         return executor

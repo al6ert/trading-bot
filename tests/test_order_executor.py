@@ -1,36 +1,52 @@
 import pytest
 from unittest.mock import MagicMock
+from app.domain.schemas import TradeAction, OrderRequest, OrderResult, PortfolioState
 
-def test_get_account_state_success(order_executor, mock_exchange):
+@pytest.mark.asyncio
+async def test_get_portfolio_state_success(order_executor, mock_exchange):
     # Mock spot_user_state response
+    # Since we use asyncio.to_thread, the mock will be called in a thread.
+    # Standard MagicMock works fine here.
     mock_exchange.return_value.info.spot_user_state.return_value = {
         'balances': [{'coin': 'USDC', 'total': '1500.0'}]
     }
     
-    # Mock user_state (margin summary) - though code prioritizes spot balances for equity in simplified logic
-    mock_exchange.return_value.info.user_state.return_value = {
-        'marginSummary': {'accountValue': '1500.0'}
-    }
-
-    state = order_executor.get_account_state()
+    state = await order_executor.get_portfolio_state()
     
-    assert state['total_equity'] == 1500.0
-    assert state['available_balance'] == 1500.0
-    assert len(state['positions']) == 1
+    assert isinstance(state, PortfolioState)
+    assert state.total_equity == 1500.0
+    assert state.available_balance == 1500.0
+    assert len(state.positions) == 0
 
-def test_get_account_state_error(order_executor, mock_exchange):
+@pytest.mark.asyncio
+async def test_get_portfolio_state_error(order_executor, mock_exchange):
     mock_exchange.return_value.info.spot_user_state.side_effect = Exception("API Error")
     
-    state = order_executor.get_account_state()
+    state = await order_executor.get_portfolio_state()
     
-    assert state['total_equity'] == 0.0
-    assert state['available_balance'] == 0.0
-    assert state['positions'] == []
+    assert state.total_equity == 0.0
+    assert state.available_balance == 0.0
+    assert state.positions == []
 
-def test_execute_order_buy(order_executor, mock_exchange):
-    mock_exchange.return_value.order.return_value = {'status': 'ok', 'oid': 123}
+@pytest.mark.asyncio
+async def test_execute_order_buy(order_executor, mock_exchange):
+    mock_exchange.return_value.order.return_value = {
+        'status': 'ok', 
+        'response': {'oid': 123}
+    }
     
-    order_executor.execute_order('BUY', 0.1, 2000.0)
+    order_req = OrderRequest(
+        symbol="ETH",
+        action=TradeAction.BUY,
+        size=0.1,
+        price=2000.0
+    )
+    
+    result = await order_executor.execute_order(order_req)
+    
+    assert isinstance(result, OrderResult)
+    assert result.status == "FILLED"
+    assert result.order_id == "123"
     
     # Verify order call
     mock_exchange.return_value.order.assert_called_once()
@@ -42,10 +58,24 @@ def test_execute_order_buy(order_executor, mock_exchange):
     assert call_args['limit_px'] == 2100.0
     assert call_args['order_type'] == {"limit": {"tif": "Ioc"}}
 
-def test_execute_order_sell(order_executor, mock_exchange):
-    mock_exchange.return_value.order.return_value = {'status': 'ok', 'oid': 124}
+@pytest.mark.asyncio
+async def test_execute_order_sell(order_executor, mock_exchange):
+    mock_exchange.return_value.order.return_value = {
+        'status': 'ok', 
+        'response': {'oid': 124}
+    }
     
-    order_executor.execute_order('SELL', 0.5, 2000.0)
+    order_req = OrderRequest(
+        symbol="ETH",
+        action=TradeAction.SELL,
+        size=0.5,
+        price=2000.0
+    )
+    
+    result = await order_executor.execute_order(order_req)
+    
+    assert result.status == "FILLED"
+    assert result.order_id == "124"
     
     # Verify order call
     mock_exchange.return_value.order.assert_called_once()

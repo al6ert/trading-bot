@@ -8,8 +8,20 @@ logger = logging.getLogger(__name__)
 
 class DataIngestor:
     def __init__(self):
-        self.info = Info(constants.TESTNET_API_URL, skip_ws=True)
+        self._info = None
         self.symbol = settings.SYMBOL
+    
+    @property
+    def info(self):
+        """Lazy initialization of Info API"""
+        if self._info is None:
+            try:
+                self._info = Info(constants.TESTNET_API_URL, skip_ws=True)
+                logger.info("DataIngestor: Connected to Hyperliquid API")
+            except Exception as e:
+                logger.error(f"DataIngestor: Failed to connect to Hyperliquid API: {e}")
+                raise
+        return self._info
         
     def get_candles(self, timeframe: str = "15m", limit: int = 100) -> pd.DataFrame:
         """

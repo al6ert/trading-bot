@@ -109,17 +109,10 @@ class HyperliquidClient:
         interval: 15m, 1h, 4h, 1d, etc.
         """
         try:
-            # Hyperliquid API expects 'coin' (symbol), 'interval', 'startTime', 'endTime'
-            # The SDK Info class might have a wrapper, but we can also call the raw endpoint via the info object if needed.
-            # Looking at standard SDK usage: info.candles_snapshot(coin, interval, startTime, endTime)
-            
-            # Map our timeframe strings to Hyperliquid intervals if necessary
-            # Hyperliquid intervals: 1m, 5m, 15m, 1h, 4h, 8h, 1d, 3d, 1w, 1M
-            
             # Ensure symbol is just the coin name (e.g. "BTC" not "BTC/USDT")
             coin = symbol.replace("/USDT", "").replace("-USD", "")
             
-            # Default timestamps if not provided (Hyperliquid requires them)
+            # Default timestamps if not provided (Hyperliquid requires them in milliseconds)
             if end_time is None:
                 end_time = int(time.time() * 1000)
             
@@ -140,16 +133,19 @@ class HyperliquidClient:
                 elif interval == "1M":
                     duration_ms = 30 * 24 * 3600 * 1000
                     
-                start_time = end_time - (duration_ms * 1000)
+                start_time = end_time - (duration_ms * 1000)  # Get 1000 periods
 
+            # SDK expects positional arguments: candles_snapshot(coin, interval, startTime, endTime)
             candles = self.info.candles_snapshot(
-                name=coin, 
-                interval=interval, 
-                startTime=start_time, 
-                endTime=end_time
+                coin,
+                interval, 
+                start_time, 
+                end_time
             )
             
             return candles
         except Exception as e:
             logger.error(f"Error fetching candles for {symbol}: {e}")
             return []
+
+

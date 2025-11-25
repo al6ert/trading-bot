@@ -284,3 +284,37 @@ class DummyDataManager:
 
     def get_logs(self, limit=50):
         return self.logs[:limit]
+    
+    def get_summary(self):
+        """Portfolio summary"""
+        return {
+            "total_equity": self.total_equity,
+            "crypto_pct": self.crypto_pct,
+            "stable_pct": self.stable_pct,
+            "short_term_value": self.short_term["value_usd"],
+            "long_term_value": self.long_term["value_usd"]
+        }
+    
+    def get_bags(self):
+        """Returns short term and long term bags"""
+        return {
+            "short_term": self.short_term,
+            "long_term": self.long_term
+        }
+    
+    def get_equity_curve(self):
+        """Returns historical equity data"""
+        return self.equity_series
+    
+    def get_composition(self):
+        """Returns portfolio composition over time"""
+        return self.composition_series
+    
+    def get_short_term_performance(self):
+        """Returns short term PnL history"""
+        return self.short_term_pnl_history
+    
+    def get_long_term_performance(self):
+        """Returns long term growth history"""
+        return self.long_term_growth_history
+
