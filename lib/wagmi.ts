@@ -15,7 +15,7 @@ import {
 
 export const config = getDefaultConfig({
   appName: 'Hyperliquid Trader Bot',
-  projectId: 'YOUR_PROJECT_ID', // Get one from WalletConnect Cloud
+  projectId: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || 'YOUR_PROJECT_ID', // Get one from WalletConnect Cloud
   chains: [
     mainnet,
     arbitrum,

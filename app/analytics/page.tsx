@@ -53,10 +53,17 @@ export default function AnalyticsPage() {
         const long = await resLong.json();
         
         if (mounted.current) {
-          setEquityData(equity);
-          setCompositionData(comp);
-          setShortTermPerf(short);
-          setLongTermPerf(long);
+          // Normalize data format - backend returns arrays directly, wrap them
+          setEquityData({ series: Array.isArray(equity) ? equity : equity.series || [] });
+          setCompositionData({ series: Array.isArray(comp) ? comp : comp.series || [] });
+          setShortTermPerf({ 
+            pnl_history: Array.isArray(short) ? short : short.pnl_history || [],
+            total_pnl: short.total_pnl || 0
+          });
+          setLongTermPerf({ 
+            growth_history: Array.isArray(long) ? long : long.growth_history || [],
+            total_accumulated: long.total_accumulated || 0
+          });
         }
       } catch (e) {
         console.error("Failed to fetch analytics data", e);

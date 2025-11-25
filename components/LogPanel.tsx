@@ -61,7 +61,7 @@ export const LogPanel = () => {
 
         {/* Filters */}
         <div className="flex gap-2 mb-2 text-[10px] font-bold uppercase">
-          {['ALL', 'TRADES', 'ERRORS'].map(f => (
+          {['ALL', 'TRADE', 'ERROR'].map(f => (
             <button 
               key={f}
               onClick={() => setFilter(f)}

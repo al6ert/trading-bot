@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hyperliquid Trading Bot - Frontend
 
-## Getting Started
+Next.js dashboard for monitoring and controlling the trading bot.
 
-First, run the development server:
+## Features
+
+- 🎨 **Modern UI**: Built with Next.js 16, React 19, and DaisyUI
+- 💼 **Wallet Integration**: RainbowKit + Wagmi for Web3 wallet connection
+- 📊 **TradingView Charts**: Real-time price charts with trade markers
+- 📈 **Portfolio Tracking**: Live portfolio updates with crypto/stable allocation
+- 🎯 **Dual Bag System**: Separate tracking for trading and HODL strategies
+- 🔄 **Real-time Updates**: Auto-refreshing data from backend API
+- 🧪 **Dummy Mode**: Test the interface without connecting a wallet
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **UI**: React 19, DaisyUI, Tailwind CSS 4
+- **Charts**: Lightweight Charts (TradingView)
+- **Web3**: RainbowKit, Wagmi, Viem
+- **Testing**: Jest, React Testing Library
+
+## Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables (Optional)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create `.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-## Learn More
+## Testing
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm test              # Run all tests
+npm test -- --watch   # Watch mode
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Available Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm start` | Start production server |
+| `npm run lint` | Run ESLint |
+| `npm test` | Run Jest tests |
 
-## Deploy on Vercel
+## Usage
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Landing Page
+- **Connect Wallet**: Use RainbowKit to connect your Web3 wallet
+- **Dummy Mode**: Click "Enter with Dummy Wallet" to test without a wallet
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Dashboard
+- **Portfolio Progress Bar**: Total equity with crypto/stable allocation
+- **Short-Term Bag**: Active trading strategies and 24h PnL
+- **Long-Term Bag**: HODL positions and total yield
+- **TradingView Chart**: BTC/USDT with multiple timeframes
+- **Log Panel**: Real-time bot activity
+
+## License
+
+Private Project

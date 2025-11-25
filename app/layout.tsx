@@ -13,6 +13,8 @@ export const metadata: Metadata = {
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { ConditionalHeader } from "@/components/ConditionalHeader";
+import "./wallet-extension-fix";
+
 
 // ... imports
 

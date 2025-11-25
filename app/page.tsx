@@ -47,19 +47,6 @@ export default function LandingPage() {
             <div className="flex justify-center">
               <ConnectButton label="Connect Wallet" />
             </div>
-            
-            <div className="divider text-xs opacity-50">OR TEST MODE</div>
-            
-            <button 
-              onClick={() => {
-                localStorage.setItem('dummy_mode', 'true');
-                router.push('/dashboard');
-              }}
-              className="btn btn-outline btn-sm gap-2"
-            >
-              <Wallet className="w-4 h-4" />
-              Enter with Dummy Wallet
-            </button>
           </div>
         </div>
       </div>

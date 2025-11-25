@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { HealthIndicator } from './HealthIndicator';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { LayoutDashboard, LineChart } from 'lucide-react';
 
@@ -14,12 +14,13 @@ export function Header() {
   const toggleBot = async () => {
     try {
       const endpoint = isRunning ? 'stop' : 'start';
-      const res = await fetch(`http://localhost:8000/${endpoint}`, { method: 'POST' });
+      const res = await fetch(`http://localhost:8000/api/v2/${endpoint}`, { method: 'POST' });
       const data = await res.json();
-      if (data.status === 'started' || data.status === 'already_running') {
-        setIsRunning(true);
+      // Backend returns { status: "running" | "stopped" } usually, or we check success
+      if (endpoint === 'start') {
+          setIsRunning(true);
       } else {
-        setIsRunning(false);
+          setIsRunning(false);
       }
     } catch (e) {
       console.error("Failed to toggle bot", e);
@@ -27,6 +28,32 @@ export function Header() {
       setIsRunning(!isRunning);
     }
   };
+
+  const handlePanic = async () => {
+      if (!confirm("⚠️ EMERGENCY: Are you sure you want to STOP the bot and CLOSE ALL positions?")) return;
+      
+      try {
+          const res = await fetch('http://localhost:8000/api/v2/panic', { method: 'POST' });
+          if (res.ok) {
+              setIsRunning(false);
+              alert("🚨 PANIC MODE ACTIVATED: Bot stopped and positions closing.");
+          }
+      } catch (e) {
+          console.error("Panic failed", e);
+          alert("Failed to execute Panic Mode. Check console.");
+      }
+  };
+
+  useEffect(() => {
+      // Check initial status
+      fetch('http://localhost:8000/api/v2/status')
+          .then(res => res.json())
+          .then(data => {
+              if (data.status === 'running') setIsRunning(true);
+              else setIsRunning(false);
+          })
+          .catch(e => console.error("Failed to fetch status", e));
+  }, []);
 
   return (
     <div className="navbar bg-base-100 px-6 h-20 border-b border-base-200/50">
@@ -56,6 +83,11 @@ export function Header() {
       </div>
       
       <div className="flex-none flex items-center gap-6">
+        {/* Panic Button */}
+        <button onClick={handlePanic} className="btn btn-error btn-sm font-bold text-white animate-pulse">
+            🚨 PANIC
+        </button>
+
         {/* Status Toggle */}
         <div className="flex items-center gap-3">
           <span className={`text-xs font-bold uppercase tracking-wide ${isRunning ? 'text-success' : 'text-base-content/50'}`}>
