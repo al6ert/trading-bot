@@ -1,0 +1,33 @@
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.db
+backend/*.sqlite
+backend/.env
+backend/logs/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*
+frontend/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Planning and temporary files
+*.tmp
+*.bak
+*~
