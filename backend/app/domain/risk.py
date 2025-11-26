@@ -8,8 +8,15 @@ logger = logging.getLogger(__name__)
 class RiskManager(IRiskManager):
     def __init__(self):
         self.max_drawdown_daily = 0.02  # 2% max daily loss
-        self.min_liquidity_reserve = 0.20 # 20% USDC reserve
+        self.min_liquidity_reserve = 0.20 # Default 20% USDC reserve
+        self.btc_lock_pct = 0.0 # Default 0% BTC lock
         self.leverage_limit = 1.0 # Strict 1x
+
+    def update_allocation(self, usdc_lock: float, btc_lock: float):
+        """Updates the safety locks (percentages 0-100)"""
+        self.min_liquidity_reserve = usdc_lock / 100.0
+        self.btc_lock_pct = btc_lock / 100.0
+        logger.info(f"🛡️ Risk Settings Updated: USDC Lock={usdc_lock}%, BTC Lock={btc_lock}%")
 
     async def validate(self, signal: TradingSignal, portfolio: PortfolioState) -> bool:
         """
@@ -35,7 +42,25 @@ class RiskManager(IRiskManager):
                 logger.warning(f"⛔ RISK: Insufficient liquidity reserve. Available: {portfolio.available_balance}, Required: {reserve_amount}")
                 return False
 
-        # Rule 3: Leverage Check (Always 1x)
+        # Rule 3: BTC Lock (For SELL orders)
+        if signal.action == TradeAction.SELL and signal.symbol == "BTC":
+            # Calculate minimum BTC value to keep
+            min_btc_value = portfolio.total_equity * self.btc_lock_pct
+            
+            # Estimate current BTC value (using signal price as proxy)
+            current_btc_size = sum(p.size for p in portfolio.positions if p.symbol == "BTC")
+            current_btc_value = current_btc_size * signal.price
+            
+            # Calculate value after sell
+            # We don't know exact size here yet (it's calculated in calculate_size), 
+            # but we can check if we are already below or near limit.
+            # Ideally, calculate_size should also respect this.
+            
+            if current_btc_value <= min_btc_value:
+                 logger.warning(f"⛔ RISK: BTC Lock Active. Current Value: {current_btc_value}, Required Lock: {min_btc_value}")
+                 return False
+
+        # Rule 4: Leverage Check (Always 1x)
         # Implicitly handled by sizing logic, but good to keep in mind.
         
         logger.info("✅ SENTINEL: Signal Approved.")

@@ -11,6 +11,8 @@ from app.infrastructure.hyperliquid.client import HyperliquidClient
 from app.core.bot import BotManager
 from app.core.dummy_data import DummyDataManager
 from app.core.websocket import manager
+import pandas as pd
+from app.domain.strategies.indicators import Indicators
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +141,14 @@ async def get_short_term_performance(db: AsyncSession = Depends(get_db)):
 async def get_long_term_performance(db: AsyncSession = Depends(get_db)):
     return dummy_data.get_long_term_performance()
 
+@router.get("/analytics/benchmarks")
+async def get_benchmarks():
+    return dummy_data.get_benchmarks()
+
+@router.get("/analytics/session")
+async def get_session_health():
+    return dummy_data.get_session_health()
+
 # --- Market Data Endpoints ---
 
 @router.get("/market/candles")
@@ -153,19 +163,64 @@ def get_candles(timeframe: str = "1h", start: Optional[int] = None, end: Optiona
     
     # Transform to frontend format if necessary
     # Hyperliquid returns: {'t': 163..., 'o': '...', 'h': '...', 'l': '...', 'c': '...', 'v': '...'}
-    # Frontend expects: { time: number, open: number, high: number, low: number, close: number }
+    # Frontend expects: { time: number, open: number, high: number, low: number, close: number, state: string }
     
-    formatted_candles = []
-    for c in candles:
-        formatted_candles.append({
-            "time": int(c['t'] / 1000), # Convert ms to s
-            "open": float(c['o']),
-            "high": float(c['h']),
-            "low": float(c['l']),
-            "close": float(c['c'])
-        })
+    if not candles:
+        return []
+
+    # Calculate Indicators for State
+    try:
+        df = pd.DataFrame(candles)
+        df['close'] = df['c'].astype(float)
         
-    return formatted_candles
+        # Calculate EMA 50 for Trend
+        # We need enough data. If not enough, state will be 'chop' or default.
+        if len(df) >= 50:
+            df['ema_50'] = Indicators.ema(df['close'], 50)
+            
+            # Determine State
+            # Bull: Close > EMA 50
+            # Bear: Close < EMA 50
+            # Chop: (Optional enhancement later)
+            
+            def get_state(row):
+                if pd.isna(row['ema_50']):
+                    return "chop"
+                return "bull" if row['close'] > row['ema_50'] else "bear"
+                
+            df['state'] = df.apply(get_state, axis=1)
+        else:
+            df['state'] = "chop"
+            
+        formatted_candles = []
+        for index, row in df.iterrows():
+            # Match original candle data by index or assume order is preserved
+            c = candles[index]
+            formatted_candles.append({
+                "time": int(c['t'] / 1000), # Convert ms to s
+                "open": float(c['o']),
+                "high": float(c['h']),
+                "low": float(c['l']),
+                "close": float(c['c']),
+                "state": row['state']
+            })
+            
+        return formatted_candles
+        
+    except Exception as e:
+        logger.error(f"Error calculating candle state: {e}")
+        # Fallback to raw data without state
+        formatted_candles = []
+        for c in candles:
+            formatted_candles.append({
+                "time": int(c['t'] / 1000),
+                "open": float(c['o']),
+                "high": float(c['h']),
+                "low": float(c['l']),
+                "close": float(c['c']),
+                "state": "chop"
+            })
+        return formatted_candles
 
 @router.get("/market/trades")
 async def get_trades(db: AsyncSession = Depends(get_db)):
@@ -253,4 +308,40 @@ async def panic_button():
         "action": "panic_close_all",
         "message": f"Bot stopped. Generated {count} close orders.",
         "orders_generated": count
+    }
+
+# --- Capital Allocation Endpoints ---
+
+from pydantic import BaseModel, Field
+
+class AllocationConfig(BaseModel):
+    usdc_lock: float = Field(..., ge=0, le=100, description="Percentage of equity to keep in USDC")
+    btc_lock: float = Field(..., ge=0, le=100, description="Percentage of equity to keep in BTC")
+
+@router.post("/bot/allocation")
+async def update_allocation(config: AllocationConfig):
+    """
+    Update the Capital Allocation settings (Safety Locks).
+    """
+    if config.usdc_lock + config.btc_lock > 100:
+        return {"error": "Total allocation cannot exceed 100%"}
+        
+    # Update Risk Manager
+    # Since BotManager is a singleton, this updates the active instance
+    bot.risk.update_allocation(config.usdc_lock, config.btc_lock)
+    
+    return {
+        "status": "updated",
+        "usdc_lock": config.usdc_lock,
+        "btc_lock": config.btc_lock
+    }
+
+@router.get("/bot/allocation")
+async def get_allocation():
+    """
+    Get current Capital Allocation settings.
+    """
+    return {
+        "usdc_lock": bot.risk.min_liquidity_reserve * 100,
+        "btc_lock": bot.risk.btc_lock_pct * 100
     }

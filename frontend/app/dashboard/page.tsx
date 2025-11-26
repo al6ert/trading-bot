@@ -5,12 +5,11 @@ import dynamic from 'next/dynamic';
 import { IndicatorPanel } from '@/components/IndicatorPanel';
 import { PositionsTable } from '@/components/PositionsTable';
 import { LogPanel } from '@/components/LogPanel';
+import { CapitalAllocationBar } from '@/components/CapitalAllocationBar';
+import { AlphaCluster } from '@/components/AlphaCluster';
 import { Zap } from 'lucide-react';
 
-const TradingViewChart = dynamic(
-  () => import('@/components/charts/TradingViewChart').then((mod) => mod.TradingViewChart),
-  { ssr: false }
-);
+import { NarrativeLineChart } from '@/components/charts/NarrativeLineChart';
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<any>(null);
@@ -19,7 +18,36 @@ export default function DashboardPage() {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState('1h');
+  const [usdcLock, setUsdcLock] = useState(20);
+  const [btcLock, setBtcLock] = useState(20);
   const mounted = useRef(true);
+
+  // Fetch allocation locks on mount
+  useEffect(() => {
+    fetch('http://localhost:8000/api/v2/bot/allocation')
+      .then(res => res.json())
+      .then(data => {
+        setUsdcLock(data.usdc_lock);
+        setBtcLock(data.btc_lock);
+      })
+      .catch(e => console.error("Failed to fetch allocation", e));
+  }, []);
+
+  // Update allocation handler
+  const handleAllocationChange = async (usdc: number, btc: number) => {
+    setUsdcLock(usdc);
+    setBtcLock(btc);
+    
+    try {
+      await fetch('http://localhost:8000/api/v2/bot/allocation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usdc_lock: usdc, btc_lock: btc })
+      });
+    } catch (e) {
+      console.error("Failed to update allocation", e);
+    }
+  };
 
   useEffect(() => {
     mounted.current = true;
@@ -85,37 +113,61 @@ export default function DashboardPage() {
         {/* Total Equity */}
         <div className="card bg-base-100 shadow-sm border border-base-200">
             <div className="card-body p-4">
-                <div className="text-xs font-bold opacity-50 uppercase">Total Equity</div>
-                <div className="text-2xl font-black tracking-tight">
+                <div className="text-xs font-bold opacity-50 uppercase mb-1">Total Equity</div>
+                <div className="text-3xl font-black tracking-tight mb-3">
                     ${summary.total_equity.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                </div>
+                
+                {/* Breakdown - Stacked */}
+                <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between items-center">
+                        <span className="text-success font-medium">USDC:</span>
+                        <div className="text-right">
+                            <span className="font-bold">${summary.available_balance.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                            <span className="opacity-50 ml-1.5 text-xs">
+                                ({((summary.available_balance / summary.total_equity) * 100).toFixed(0)}%)
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-warning font-medium">BTC:</span>
+                        <div className="text-right">
+                            <span className="font-bold">
+                                {(() => {
+                                    // Calculate BTC amount from positions
+                                    const btcPosition = bags?.positions?.find((p: any) => p.symbol === 'BTC');
+                                    const btcAmount = btcPosition?.size || 0;
+                                    return `${btcAmount.toFixed(6)} BTC`;
+                                })()}
+                            </span>
+                            <span className="opacity-50 ml-1.5 text-xs">
+                                (${(summary.total_equity - summary.available_balance).toLocaleString(undefined, {maximumFractionDigits: 0})})
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         
-        {/* 24h PnL (Mocked for now as 0, backend needs to provide this) */}
-        <div className="card bg-base-100 shadow-sm border border-base-200">
-            <div className="card-body p-4">
-                <div className="text-xs font-bold opacity-50 uppercase">24h PnL</div>
-                <div className="text-2xl font-bold font-mono text-base-content opacity-50">
-                    $0.00 <span className="text-xs font-normal">(0.00%)</span>
-                </div>
-            </div>
-        </div>
+        
+        {/* Alpha Cluster (Benchmarks) */}
+        <AlphaCluster 
+            botPerformance={5.2} 
+            benchmarkBtc={2.1} 
+            benchmarkDca={3.4} 
+        />
 
-        {/* Active Strategy */}
+        {/* Capital Allocation (Safety Locks) */}
         <div className="card bg-base-100 shadow-sm border border-base-200 md:col-span-2">
-            <div className="card-body p-4 flex flex-row items-center justify-between">
-                <div>
-                    <div className="text-xs font-bold opacity-50 uppercase">Active Strategy</div>
-                    <div className="text-lg font-bold flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-warning" />
-                        {bags.active_strategy}
-                    </div>
-                </div>
-                <div className="text-right">
-                     <div className="text-xs font-bold opacity-50 uppercase">Exposure</div>
-                     <div className="font-mono font-bold">{summary.crypto_pct}%</div>
-                </div>
+            <div className="card-body p-4">
+                <CapitalAllocationBar 
+                    totalValue={summary.total_equity} 
+                    currentUsdcPct={Math.round((summary.available_balance / summary.total_equity) * 100)}
+                    currentBtcPct={Math.round(((summary.total_equity - summary.available_balance) / summary.total_equity) * 100)}
+                    initialUsdcLock={usdcLock}
+                    initialBtcLock={btcLock}
+                    onAllocationChange={handleAllocationChange}
+                />
             </div>
         </div>
       </div>
@@ -142,32 +194,10 @@ export default function DashboardPage() {
                  </div>
             </div>
             <div className="flex-1 w-full min-h-0 relative">
-                <TradingViewChart 
+                <NarrativeLineChart 
                     candles={candles} 
-                    markers={trades} 
+                    trades={trades} 
                     height={450}
-                    onLoadMore={async (startTime) => {
-                        console.log("Loading more history before:", startTime);
-                        try {
-                            const secondsPerCandle = {
-                                '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400, '1w': 604800, '1M': 2592000
-                            }[timeframe] || 3600;
-                            
-                            const limit = 1000;
-                            const rangeSeconds = limit * secondsPerCandle;
-                            const fetchStartTime = startTime - rangeSeconds;
-
-                            const res = await fetch(`http://localhost:8000/api/v2/market/candles?timeframe=${timeframe}&start=${fetchStartTime}&end=${startTime - 1}`);
-                            if (res.ok) {
-                                const newCandles = await res.json();
-                                if (newCandles.length > 0) {
-                                    setCandles(prev => [...newCandles, ...prev]);
-                                }
-                            }
-                        } catch (e) {
-                            console.error("Failed to load more history", e);
-                        }
-                    }}
                 />
             </div>
         </div>

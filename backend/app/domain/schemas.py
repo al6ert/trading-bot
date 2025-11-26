@@ -21,6 +21,7 @@ class Candle(BaseModel):
     close: float
     volume: float
     symbol: str
+    state: Optional[Literal["bull", "bear", "chop"]] = "chop"
 
     model_config = ConfigDict(frozen=True)
 
@@ -61,4 +62,17 @@ class OrderResult(BaseModel):
     filled_price: Optional[float] = None
     filled_size: Optional[float] = None
     error_message: Optional[str] = None
+    filled_size: Optional[float] = None
+    error_message: Optional[str] = None
     payload: Optional[Dict[str, Any]] = None
+
+class BenchmarkMetric(BaseModel):
+    asset: str
+    roi: float
+    color: str
+
+class SessionMetric(BaseModel):
+    label: str
+    value: str
+    status: Literal["good", "warning", "danger", "neutral"]
+

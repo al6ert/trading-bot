@@ -1,63 +1,82 @@
-# Dashboard UX Specification: "The Cockpit"
+# Dashboard UX Specification: "The Narrative Cockpit"
 
 ## 1. Philosophy: Operational Transparency
-The user is a pilot, not an analyst. They need to know:
-1.  **Status:** Is the bot running? Is it safe?
-2.  **Context:** What is the market doing? (Trend vs Range)
-3.  **Action:** What is the bot doing about it?
+The user is a pilot, not an analyst. We replace technical noise (candles, complex indicators) with a narrative story:
+1.  **Context over Data:** Don't show "RSI is 70", show "Market is Overheated".
+2.  **State over Price:** The price line color matters more than the candle shape.
+3.  **Alpha over Profit:** Show performance relative to the market (BTC), not just USD.
 
-## 2. Layout: Single Page Grid (Desktop First)
-Eliminate navigation between "Dashboard" and "Analytics". Everything important fits on one screen.
+## 2. Layout: Single Page Grid (No Tabs)
 
 ```mermaid
 graph TD
-    Header[Header: Wallet | Bot Status (On/Off) | Panic Button]
-    KPIs[KPI Row: Equity | PnL 24h | Active Strategy | Risk Level]
-    Chart[Main Chart: Price + EMA + Trades]
-    Indicators[Sub-Chart: ADX / Regime Strength]
-    Positions[Active Positions Table]
-    Logs[Narrative Log Feed]
+    Header[Header: Capital Bar with Safety Locks | Panic Button]
+    Main[Main Section]
+    
+    subgraph "Main Section"
+        Chart[Narrative Line Chart (The Story)]
+        Intelligence[Intelligence Panel]
+    end
 
-    Header --> KPIs
-    KPIs --> Chart
-    Chart --> Indicators
-    KPIs --> Positions
-    Positions --> Logs
+    subgraph "Intelligence Panel (Bottom/Side)"
+        Alpha[Alpha Cluster: Bot vs B&H vs DCA]
+        Health[Session Health: WinRate/DD]
+        Holdings[Active Holdings Table]
+    end
+
+    Header --> Main
 ```
 
 ## 3. Component Specifications
 
-### A. KPI Header (The Vitals)
-- **Total Equity:** Big, bold.
-- **24h PnL:** Color-coded (Green/Red).
-- **Active Strategy:**
-    - **Visual:** Icon changing based on regime (e.g., 📈 for Trend, ↔️ for Range).
-    - **Text:** "Single-Core: Bull Trend" or "Single-Core: Sideways".
-- **Risk/Exposure:** "100% Invested" or "Cash Heavy".
+### A. Header: Capital Allocation & Safety Locks (FR-07, FR-12)
 
-### B. Main Chart (The Battlefield)
-- **Overlay:** EMA 200 (or relevant trend filter).
-- **Markers:** Buy/Sell arrows (already exists).
-- **Interactivity:** Infinite scroll (already exists).
+  - **Component:** `DoubleRangeSlider` overlaid on a Progress Bar.
+  - **Visual:**
+      - `[ 🔒 USDC Reserve ]` <--- `[ Active Bot Capital ]` ---> `[ 🔒 BTC Vault ]`
+  - **Interactivity:**
+      - Dragging left handle locks USDC (Dry Powder).
+      - Dragging right handle locks BTC (HODL Mode).
+      - **Warning:** Tooltip on BTC lock: "⚠️ Stopping sales here assumes HODL risk."
 
-### C. Indicator Panel (The Brain) - **NEW**
-- **Visual:** A small chart below the main price chart.
-- **Data:** ADX (Average Directional Index).
-- **Story:**
-    - ADX > 25: Background highlights GREEN (Trending).
-    - ADX < 25: Background highlights GRAY (Choppy).
-- **Why:** Explains *why* the bot is buying or holding.
+### B. Main Chart: "The Narrative Line" (FR-11)
 
-### D. Positions Table (The Bag)
-- **Columns:** Symbol | Size | Entry | Current Price | PnL (USD/%) | Action (Close Button).
-- **Style:** Compact.
+  - **Type:** Continuous Line Chart (No Candles).
+  - **The Palette (Semantic States):**
+      - 🟢 **Electric Green:** Bull Trend (Attack Mode).
+      - 🟠 **Amber/Safety Orange:** Bear Trend (Defense/Cash Mode).
+      - 🔵 **Cool Gray:** Sideways/Chop (Wait Mode).
+      - 🔴 **Crimson Red:** Panic/Error (Stopped).
+  - **Markers:**
+      - `Ghost Icon`: Potential Pivot detected (Warning).
+      - `Rocket 🚀`: Confirmed Buy.
+      - `Skull 💀`: Confirmed Sell / Stop Loss.
 
-### E. Narrative Logs (The Voice)
-- Filter logs to show "Decisions" vs "System".
-- **Format:** Time | Icon | Message.
-- **Example:** "10:00 | 🧠 | ADX is 30. Market is Trending. Looking for Longs."
+### C. Intelligence Panel
 
-## 4. Refactoring Plan (Frontend)
-1.  **Delete:** `app/analytics` (Dead code).
-2.  **Modify:** `app/dashboard/page.tsx` to implement the Grid layout.
-3.  **Enhance:** `TradingViewChart.tsx` to support a secondary series (Histogram or Line) for ADX if possible, or create a separate `IndicatorChart` component.
+#### 1. Alpha Cluster (Benchmarks) (FR-13)
+
+  - **Type:** Race Bars (Horizontal).
+  - **Data:**
+      - 🤖 **BOT:** Current PnL %.
+      - 💰 **B&H:** BTC price change since start.
+      - 📅 **DCA:** Simulated daily buy since start.
+  - **Goal:** Answer "Am I beating the market?".
+
+#### 2. Session Health (FR-14)
+
+  - **Layout:** Compact Grid (3x1).
+  - **Metrics:**
+      - **Win Rate:** (e.g., "65%").
+      - **Max DD:** Session Drawdown (e.g., "-1.2%").
+      - **Profit Factor:** Gross Win / Gross Loss.
+
+#### 3. Active Holdings
+
+  - **Columns:** Asset | Size | Avg Entry | Current Price | PnL (USD/%) | Value.
+  - **Note:** In Spot, this tracks the "Virtual Position" performance.
+
+## 4. Implementation Notes
+
+  - **Frontend:** Use a charting library that supports gradient/segment coloring based on data attributes (e.g., Recharts `stops` or Canvas API).
+  - **Backend:** Needs to send `strategy_state` along with `price` and `time` in the historical data endpoint.

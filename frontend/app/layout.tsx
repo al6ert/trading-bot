@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="lofi">
+    <html lang="en" data-theme="light">
       {/* suppressHydrationWarning is required because the agent/browser environment injects 
           'antigravity-scroll-lock' class to the body, causing a mismatch with server HTML. 
           This is a known issue with the preview environment, not the code. */}

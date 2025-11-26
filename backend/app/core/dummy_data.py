@@ -318,3 +318,19 @@ class DummyDataManager:
         """Returns long term growth history"""
         return self.long_term_growth_history
 
+    def get_benchmarks(self):
+        """Returns mock benchmark comparison"""
+        return [
+            {"asset": "Bot", "roi": 12.5, "color": "#10b981"},
+            {"asset": "BTC", "roi": 8.2, "color": "#f59e0b"},
+            {"asset": "ETH", "roi": -2.1, "color": "#6366f1"}
+        ]
+
+    def get_session_health(self):
+        """Returns mock session health metrics"""
+        return [
+            {"label": "Win Rate", "value": "68%", "status": "good"},
+            {"label": "Profit Factor", "value": "2.4", "status": "good"},
+            {"label": "Max Drawdown", "value": "-1.2%", "status": "good"}
+        ]
+

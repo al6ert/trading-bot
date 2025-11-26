@@ -64,22 +64,8 @@ export function Header() {
         </Link>
         
         {/* Navigation */}
-        <div className="flex items-center gap-1">
-          <Link 
-            href="/dashboard" 
-            className={`btn btn-sm border-0 font-bold gap-2 ${pathname === '/dashboard' ? 'btn-ghost bg-base-200/50 text-base-content' : 'btn-ghost text-base-content/60'}`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            Cockpit
-          </Link>
-          <Link 
-            href="/analytics" 
-            className={`btn btn-sm border-0 font-bold gap-2 ${pathname === '/analytics' ? 'btn-ghost bg-base-200/50 text-base-content' : 'btn-ghost text-base-content/60'}`}
-          >
-            <LineChart className="w-4 h-4" />
-            Analytics
-          </Link>
-        </div>
+
+      
       </div>
       
       <div className="flex-none flex items-center gap-6">
